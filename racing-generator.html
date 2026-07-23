@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Top-Down Racer Generator</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14171d;
+    --panel-2: #1b1f27;
+    --accent: #ffb020;
+    --accent-dim: #cc8a1a;
+    --text: #e8eaed;
+    --muted: #8b95a3;
+    --line: #262b34;
+    --danger: #e6483c;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden;
+  }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+  header {
+    padding: 14px 20px 6px;
+    text-align: center;
+    flex: none;
+  }
+  header h1 {
+    font-size: 17px;
+    font-weight: 700;
+    margin: 0 0 2px;
+    letter-spacing: 0.4px;
+  }
+  header .sub {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .layout {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    padding: 10px 14px 14px;
+    gap: 12px;
+  }
+  .stage {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    background: #000;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  canvas#track { display: block; width: 100%; height: 100%; }
+
+  .hud {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(10,12,15,0.55);
+    border: 1px solid rgba(255,176,32,0.25);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    backdrop-filter: blur(2px);
+    pointer-events: none;
+  }
+  .hud-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+  .hud-row + .hud-row { margin-top: 4px; }
+  .hud-value {
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .panel {
+    width: 260px;
+    flex: none;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 14px 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .group { display: flex; flex-direction: column; gap: 8px; }
+  .group-title {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--accent-dim);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 5px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label {
+    font-size: 11.5px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+  .field label span.val { color: var(--text); font-weight: 600; }
+
+  select {
+    width: 100%;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 8px;
+    font-size: 12.5px;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid #0b0d10;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid #0b0d10;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: var(--text);
+  }
+  .switch {
+    position: relative;
+    width: 38px; height: 21px;
+    flex: none;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider-toggle {
+    position: absolute; inset: 0;
+    background: var(--line);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .slider-toggle::before {
+    content: "";
+    position: absolute;
+    height: 15px; width: 15px;
+    left: 3px; top: 3px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: transform .15s, background .15s;
+  }
+  input:checked + .slider-toggle { background: rgba(255,176,32,0.25); }
+  input:checked + .slider-toggle::before { transform: translateX(17px); background: var(--accent); }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 2px; }
+  button {
+    flex: 1;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 9px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+  }
+  button:hover { border-color: var(--accent-dim); color: var(--accent); }
+  button.primary {
+    background: var(--accent);
+    color: #16130a;
+    border-color: var(--accent);
+  }
+  button.primary:hover { background: var(--accent-dim); color: #0b0d10; }
+
+  @keyframes shuffleFlash {
+    0%   { box-shadow: inset 0 0 0 0 rgba(255,176,32,0); }
+    30%  { box-shadow: inset 0 0 40px 4px rgba(255,176,32,0.55); }
+    100% { box-shadow: inset 0 0 0 0 rgba(255,176,32,0); }
+  }
+  .stage.shuffle-flash { animation: shuffleFlash 0.7s ease-out; }
+
+  .hint {
+    font-size: 10.5px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  @media (max-width: 780px) {
+    .layout { flex-direction: column; }
+    .panel { width: auto; max-height: 46vh; }
+    .stage { min-height: 40vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Top-Down Racer Generator</h1>
+  <div class="sub">procedural loop track · autonomous drift &amp; traffic simulation</div>
+</header>
+
+<div class="layout">
+  <div class="stage">
+    <canvas id="track"></canvas>
+    <div class="hud">
+      <div class="hud-row"><span>SPEED</span><span class="hud-value"><span id="hudSpeed">000</span> km/h</span></div>
+      <div class="hud-row"><span>LAP</span><span class="hud-value" id="hudLap">1</span></div>
+      <div class="hud-row"><span>CAR</span><span class="hud-value" id="hudCar">Sports</span></div>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <div class="group">
+      <div class="group-title">Vehicle</div>
+      <div class="field">
+        <label>Car type</label>
+        <select id="carType">
+          <option value="sedan">Sedan</option>
+          <option value="sports" selected>Sports car</option>
+          <option value="truck">Truck</option>
+          <option value="buggy">Dune buggy</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Environment</div>
+      <div class="field">
+        <label>Landscape</label>
+        <select id="landscape">
+          <option value="desert" selected>Desert</option>
+          <option value="grass">Grassland</option>
+          <option value="snow">Snow</option>
+          <option value="city">City</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Track</div>
+      <div class="field">
+        <label>Curvyness <span class="val" id="curvyVal">55</span></label>
+        <input type="range" id="curvy" min="0" max="100" value="55">
+      </div>
+      <div class="field">
+        <label>Track width <span class="val" id="widthVal">55</span></label>
+        <input type="range" id="trackWidth" min="0" max="100" value="55">
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Handling</div>
+      <div class="field">
+        <label>Speed <span class="val" id="speedVal">60</span></label>
+        <input type="range" id="speed" min="10" max="100" value="60">
+      </div>
+      <div class="field">
+        <label>Drift amount <span class="val" id="driftVal">45</span></label>
+        <input type="range" id="drift" min="0" max="100" value="45">
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Traffic</div>
+      <div class="field">
+        <label>Cars on track <span class="val" id="trafficVal">4</span></label>
+        <input type="range" id="traffic" min="0" max="8" value="4">
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Effects</div>
+      <div class="toggle-row">
+        <span>Kick up dust / smoke</span>
+        <label class="switch">
+          <input type="checkbox" id="dust" checked>
+          <span class="slider-toggle"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Audio</div>
+      <div class="toggle-row">
+        <span>Racing music</span>
+        <label class="switch">
+          <input type="checkbox" id="music">
+          <span class="slider-toggle"></span>
+        </label>
+      </div>
+      <div class="field">
+        <label>Music volume <span class="val" id="musicVolVal">60</span></label>
+        <input type="range" id="musicVol" min="0" max="100" value="60">
+      </div>
+      <div class="field">
+        <label>A/V trim <span class="val" id="avTrimVal">0 ms</span></label>
+        <input type="range" id="avTrim" min="-300" max="300" step="10" value="0">
+      </div>
+      <div class="hint">Shifts the music earlier (negative) or later (positive) to line up with your speakers/headphones.</div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Automation</div>
+      <div class="toggle-row">
+        <span>Auto-shuffle every 20s</span>
+        <label class="switch">
+          <input type="checkbox" id="autoRandom" checked>
+          <span class="slider-toggle"></span>
+        </label>
+      </div>
+      <div class="hint">Randomizes every setting, generates a new track layout, and writes a new riff for the current landscape.</div>
+      <button id="shuffleBtn">Shuffle now</button>
+    </div>
+
+    <div class="btn-row">
+      <button id="newTrackBtn" class="primary">New track</button>
+      <button id="pauseBtn">Pause</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('track');
+  const ctx = canvas.getContext('2d');
+
+  const WORLD_W = 1000, WORLD_H = 600;
+
+  // ---------- settings ----------
+  const settings = {
+    carType: 'sports',
+    landscape: 'desert',
+    speed: 60,
+    curvy: 55,
+    trackWidthPct: 55,
+    drift: 45,
+    traffic: 4,
+    dust: true,
+    music: false,
+    musicVol: 60,
+    avTrimMs: 0,
+    autoRandom: true
+  };
+
+  const els = {
+    carType: document.getElementById('carType'),
+    landscape: document.getElementById('landscape'),
+    speed: document.getElementById('speed'),
+    curvy: document.getElementById('curvy'),
+    trackWidth: document.getElementById('trackWidth'),
+    drift: document.getElementById('drift'),
+    traffic: document.getElementById('traffic'),
+    dust: document.getElementById('dust'),
+    speedVal: document.getElementById('speedVal'),
+    curvyVal: document.getElementById('curvyVal'),
+    widthVal: document.getElementById('widthVal'),
+    driftVal: document.getElementById('driftVal'),
+    trafficVal: document.getElementById('trafficVal'),
+    hudSpeed: document.getElementById('hudSpeed'),
+    hudLap: document.getElementById('hudLap'),
+    hudCar: document.getElementById('hudCar'),
+    newTrackBtn: document.getElementById('newTrackBtn'),
+    pauseBtn: document.getElementById('pauseBtn'),
+    music: document.getElementById('music'),
+    musicVol: document.getElementById('musicVol'),
+    musicVolVal: document.getElementById('musicVolVal'),
+    avTrim: document.getElementById('avTrim'),
+    avTrimVal: document.getElementById('avTrimVal'),
+    autoRandom: document.getElementById('autoRandom'),
+    shuffleBtn: document.getElementById('shuffleBtn')
+  };
+
+  els.carType.addEventListener('change', e => {
+    settings.carType = e.target.value;
+    els.hudCar.textContent = CAR_TYPES[settings.carType].name;
+  });
+  els.landscape.addEventListener('change', e => settings.landscape = e.target.value);
+  els.speed.addEventListener('input', e => { settings.speed = +e.target.value; els.speedVal.textContent = settings.speed; });
+  els.curvy.addEventListener('input', e => { settings.curvy = +e.target.value; els.curvyVal.textContent = settings.curvy; rebuildTrack(false, false); });
+  els.trackWidth.addEventListener('input', e => { settings.trackWidthPct = +e.target.value; els.widthVal.textContent = settings.trackWidthPct; });
+  els.drift.addEventListener('input', e => { settings.drift = +e.target.value; els.driftVal.textContent = settings.drift; });
+  els.traffic.addEventListener('input', e => { settings.traffic = +e.target.value; els.trafficVal.textContent = settings.traffic; spawnTraffic(); });
+  els.dust.addEventListener('change', e => settings.dust = e.target.checked);
+  els.newTrackBtn.addEventListener('click', () => rebuildTrack(true, true));
+  els.pauseBtn.addEventListener('click', () => {
+    paused = !paused;
+    els.pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+  });
+
+  els.music.addEventListener('change', e => {
+    settings.music = e.target.checked;
+    if(settings.music) startAudio();
+    updateMasterGain();
+  });
+  els.musicVol.addEventListener('input', e => {
+    settings.musicVol = +e.target.value;
+    els.musicVolVal.textContent = settings.musicVol;
+    updateMasterGain();
+  });
+  els.avTrim.addEventListener('input', e => {
+    settings.avTrimMs = +e.target.value;
+    els.avTrimVal.textContent = (settings.avTrimMs > 0 ? '+' : '') + settings.avTrimMs + ' ms';
+  });
+  els.autoRandom.addEventListener('change', e => {
+    settings.autoRandom = e.target.checked;
+    if(settings.autoRandom) startAutoRandom(); else stopAutoRandom();
+  });
+  els.shuffleBtn.addEventListener('click', () => {
+    randomizeAll();
+    if(settings.autoRandom) startAutoRandom();
+  });
+
+  // ---------- car type / landscape definitions ----------
+  const CAR_TYPES = {
+    sedan:  { name: 'Sedan',     color: '#4d8bf5', window: '#1c2735', len: 30, wid: 15, speedMul: 0.90, driftMul: 0.75, dustMul: 0.9, shape: 'sedan' },
+    sports: { name: 'Sports',    color: '#e63946', window: '#1c1315', len: 30, wid: 14, speedMul: 1.18, driftMul: 1.25, dustMul: 1.0, shape: 'sports' },
+    truck:  { name: 'Truck',     color: '#8b8f97', window: '#20232a', len: 36, wid: 18, speedMul: 0.72, driftMul: 0.55, dustMul: 1.5, shape: 'truck' },
+    buggy:  { name: 'Buggy',     color: '#f2a900', window: '#241c0a', len: 24, wid: 16, speedMul: 0.95, driftMul: 1.55, dustMul: 1.8, shape: 'buggy' }
+  };
+
+  const LANDSCAPES = {
+    desert:  { skyTop: '#e8cf9c', skyBot: '#c9a463', fleck: 'rgba(150,110,50,0.25)', dust: [217,184,119], smokeMode:false, roadEdge: '#caa964', bpm: 128 },
+    grass:   { skyTop: '#5f9a4a', skyBot: '#3d7030', fleck: 'rgba(20,60,10,0.25)',   dust: [126,140,90],  smokeMode:false, roadEdge: '#4a7a3a', bpm: 132 },
+    snow:    { skyTop: '#f3f8fc', skyBot: '#d6e5ef', fleck: 'rgba(180,200,215,0.4)', dust: [255,255,255], smokeMode:false, roadEdge: '#e4eef5', bpm: 98  },
+    city:    { skyTop: '#3d434d', skyBot: '#22262c', fleck: 'rgba(0,0,0,0.25)',      dust: [150,155,160], smokeMode:true,  roadEdge: '#2b2f36', bpm: 116 }
+  };
+
+  // ---------- music: scales + rhythm templates per landscape ----------
+  const SCALES = {
+    desert: [0,2,3,5,7,8,11],   // harmonic minor - driving, exotic
+    grass:  [0,2,4,7,9,12,14],  // major pentatonic - bright, upbeat
+    snow:   [0,2,3,5,7,8,10],   // natural minor - cold, sparse
+    city:   [0,1,3,5,7,8,10]    // phrygian - dark synthwave
+  };
+  const ROOT_RANGES = { desert:[43,50], grass:[48,55], snow:[41,48], city:[38,45] };
+  const RHYTHM = {
+    desert: { kick:[0,3,6,8,11,14], hatClosed:[0,2,4,6,8,10,12,14], hatOpen:[7,15], lead:true },
+    grass:  { kick:[0,4,8,12],      hatClosed:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], hatOpen:[14], lead:true },
+    snow:   { kick:[0,8],           hatClosed:[0,4,8,12], hatOpen:[], lead:false },
+    city:   { kick:[0,4,7,8,12,15], hatClosed:[0,2,4,6,8,10,12,14], hatOpen:[6,14], lead:true }
+  };
+
+  // ---------- track generation ----------
+  let track = null;
+  let harmonics = [];
+
+  function randHarmonics(){
+    const freqs = [2,3,4,5,6,7];
+    shuffle(freqs);
+    const chosen = freqs.slice(0, 3 + Math.floor(Math.random()*2)); // 3-4 harmonics
+    let totalW = 0;
+    const hs = chosen.map(f => {
+      const w = 0.2 + Math.random()*0.35;
+      totalW += w;
+      return { freq: f, phase: Math.random()*Math.PI*2, weight: w };
+    });
+    // normalize so combined amplitude stays bounded
+    hs.forEach(h => h.weight = h.weight / totalW);
+    return hs;
+  }
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } }
+
+  function buildTrack(hs, curvyNorm){
+    const N = 300;
+    const cx = WORLD_W/2, cy = WORLD_H/2;
+    const baseR = 300, Rx = 400, Ry = 235;
+    const pts = [];
+    for(let i=0;i<N;i++){
+      const angle = (i/N)*Math.PI*2;
+      let perturb = 0;
+      for(const h of hs){ perturb += Math.sin(h.freq*angle + h.phase) * h.weight; }
+      perturb *= curvyNorm * baseR * 0.6;
+      const R = baseR + perturb;
+      const x = cx + R*Math.cos(angle) * (Rx/baseR);
+      const y = cy + R*Math.sin(angle) * (Ry/baseR);
+      pts.push({x,y});
+    }
+    const tang = [];
+    for(let i=0;i<N;i++){
+      const p0 = pts[(i-1+N)%N], p1 = pts[(i+1)%N];
+      const dx = p1.x-p0.x, dy = p1.y-p0.y;
+      const len = Math.hypot(dx,dy) || 1;
+      tang.push({x: dx/len, y: dy/len});
+    }
+    const cum = [0];
+    for(let i=1;i<=N;i++){
+      const a = pts[i-1], b = pts[i%N];
+      cum.push(cum[i-1] + Math.hypot(b.x-a.x, b.y-a.y));
+    }
+    const length = cum[N];
+    const curvRaw = [];
+    for(let i=0;i<N;i++){
+      const t0 = tang[(i-1+N)%N], t1 = tang[(i+1)%N];
+      const cross = t0.x*t1.y - t0.y*t1.x;
+      const dot = t0.x*t1.x + t0.y*t1.y;
+      const turn = Math.atan2(cross, dot);
+      const ds = (cum[i+1]-cum[i]) || 1;
+      curvRaw.push(turn/ds);
+    }
+    const curv = curvRaw.map((c,i) => (curvRaw[(i-1+N)%N] + c + curvRaw[(i+1)%N]) / 3);
+    return { pts, tang, cum, curv, length, N };
+  }
+
+  function rebuildTrack(newSeed, synced){
+    const newHarmonics = (newSeed || !harmonics.length) ? randHarmonics() : harmonics;
+    const newTrackObj = buildTrack(newHarmonics, settings.curvy/100);
+    const newPattern = buildMusicPattern(settings.landscape);
+
+    const applyFn = () => {
+      harmonics = newHarmonics;
+      track = newTrackObj;
+      player.distance = 0; player.lap = 0; player.lateral = 0;
+      els.hudLap.textContent = '1';
+      skidmarks.length = 0;
+      spawnTraffic();
+    };
+
+    if(synced){
+      scheduleSyncedApply(applyFn, newPattern);
+    } else {
+      musicPattern = newPattern;
+      applyFn();
+    }
+  }
+
+  // ---------- randomize everything ----------
+  function randInt(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+  function randChoice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  // Delays applying a visual/track change until it lines up with the moment
+  // the corresponding music pattern actually becomes audible (accounting for
+  // the A/V trim), so the picture never flips ahead of the sound. If music
+  // isn't playing there's nothing to sync to, so it applies immediately.
+  function scheduleSyncedApply(applyFn, newPattern){
+    if(pendingSwapTimer){ clearTimeout(pendingSwapTimer); pendingSwapTimer = null; }
+    if(settings.music && audioCtx){
+      pendingMusicPattern = newPattern;
+      const waitSteps = (16 - currentStep) % 16;
+      const targetTime = nextNoteTime + waitSteps*stepDuration();
+      const audibleTime = targetTime + settings.avTrimMs/1000;
+      const delayMs = Math.max(0, (audibleTime - audioCtx.currentTime) * 1000);
+      pendingSwapTimer = setTimeout(() => { pendingSwapTimer = null; applyFn(); }, delayMs);
+    } else {
+      pendingMusicPattern = null;
+      musicPattern = newPattern;
+      applyFn();
+    }
+  }
+
+  function randomizeAll(){
+    const newCarType = randChoice(['sedan','sports','truck','buggy']);
+    const newLandscape = randChoice(['desert','grass','snow','city']);
+    const newSpeed = randInt(25,100);
+    const newCurvy = randInt(0,100);
+    const newWidth = randInt(20,100);
+    const newDrift = randInt(0,100);
+    const newTraffic = randInt(0,8);
+
+    const newHarmonics = randHarmonics();
+    const newTrackObj = buildTrack(newHarmonics, newCurvy/100);
+    const newPattern = buildMusicPattern(newLandscape);
+
+    const applyFn = () => {
+      settings.carType = newCarType;
+      settings.landscape = newLandscape;
+      settings.speed = newSpeed;
+      settings.curvy = newCurvy;
+      settings.trackWidthPct = newWidth;
+      settings.drift = newDrift;
+      settings.traffic = newTraffic;
+
+      els.carType.value = newCarType;
+      els.hudCar.textContent = CAR_TYPES[newCarType].name;
+      els.landscape.value = newLandscape;
+      els.speed.value = newSpeed; els.speedVal.textContent = newSpeed;
+      els.curvy.value = newCurvy; els.curvyVal.textContent = newCurvy;
+      els.trackWidth.value = newWidth; els.widthVal.textContent = newWidth;
+      els.drift.value = newDrift; els.driftVal.textContent = newDrift;
+      els.traffic.value = newTraffic; els.trafficVal.textContent = newTraffic;
+
+      harmonics = newHarmonics;
+      track = newTrackObj;
+      player.distance = 0; player.lap = 0; player.lateral = 0;
+      els.hudLap.textContent = '1';
+      skidmarks.length = 0;
+      spawnTraffic();
+
+      const stage = document.querySelector('.stage');
+      stage.classList.remove('shuffle-flash');
+      void stage.offsetWidth; // restart animation
+      stage.classList.add('shuffle-flash');
+    };
+
+    scheduleSyncedApply(applyFn, newPattern);
+  }
+
+  let autoRandomTimer = null;
+  function startAutoRandom(){
+    stopAutoRandom();
+    autoRandomTimer = setInterval(randomizeAll, 20000);
+  }
+  function stopAutoRandom(){
+    if(autoRandomTimer){ clearInterval(autoRandomTimer); autoRandomTimer = null; }
+  }
+
+  function sampleTrack(d){
+    const N = track.N;
+    let dd = ((d % track.length) + track.length) % track.length;
+    let lo = 0, hi = N;
+    while(lo < hi){
+      const mid = (lo+hi) >> 1;
+      if(track.cum[mid] < dd) lo = mid+1; else hi = mid;
+    }
+    const i = Math.max(0, lo-1);
+    const segStart = track.cum[i], segEnd = track.cum[i+1] !== undefined ? track.cum[i+1] : track.length;
+    const t = (dd - segStart) / ((segEnd - segStart) || 1);
+    const p0 = track.pts[i], p1 = track.pts[(i+1)%N];
+    const x = p0.x + (p1.x-p0.x)*t, y = p0.y + (p1.y-p0.y)*t;
+    const tan0 = track.tang[i], tan1 = track.tang[(i+1)%N];
+    let tx = tan0.x + (tan1.x-tan0.x)*t, ty = tan0.y + (tan1.y-tan0.y)*t;
+    const tlen = Math.hypot(tx,ty) || 1; tx/=tlen; ty/=tlen;
+    const heading = Math.atan2(ty, tx);
+    const c0 = track.curv[i], c1 = track.curv[(i+1)%N];
+    const curvature = c0 + (c1-c0)*t;
+    return { x, y, heading, curvature, tangent: {x:tx,y:ty}, perp: {x:-ty, y:tx} };
+  }
+
+  function trackWidthWorld(){ return 60 + (settings.trackWidthPct/100) * 150; }
+
+  // ---------- player & traffic state ----------
+  const player = { distance: 0, lateral: 0, lap: 0, heading: 0, x:0, y:0, slip:0 };
+  let traffic = [];
+
+  function spawnTraffic(){
+    if(!track) return;
+    const n = settings.traffic;
+    traffic = [];
+    const colors = ['#7bd389','#c084fc','#5fd0e0','#f28cb1','#9fa8c9','#d9d16e','#6ee7e7','#e0967d'];
+    for(let i=0;i<n;i++){
+      const w = trackWidthWorld();
+      traffic.push({
+        distance: (track.length / n) * i + Math.random()*40,
+        lateral: (Math.random()*2-1) * (w*0.5 - 16),
+        speedMul: 0.55 + Math.random()*0.25,
+        color: colors[i % colors.length],
+        len: 26 + Math.random()*8,
+        wid: 13 + Math.random()*3
+      });
+    }
+  }
+
+  // ---------- procedural racing music ----------
+  let audioCtx = null, masterGain = null;
+  let pendingMusicPattern = null, pendingSwapTimer = null;
+  let musicPattern = null;
+  let currentStep = 0, nextNoteTime = 0, schedulerTimer = null;
+  const SCHEDULE_AHEAD = 0.42, LOOKAHEAD_MS = 25;
+
+  function midiToFreq(m){ return 440 * Math.pow(2, (m-69)/12); }
+
+  function currentBPM(){
+    const land = LANDSCAPES[settings.landscape];
+    return clamp(land.bpm + (settings.speed-50)*0.45, 80, 200);
+  }
+  function stepDuration(){ return (60/currentBPM())/4; }
+  function musicVol(){ return settings.musicVol/100; }
+
+  function noiseBuffer(ctx, dur){
+    const buf = ctx.createBuffer(1, ctx.sampleRate*dur, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+    return buf;
+  }
+
+  function playKick(time){
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.frequency.setValueAtTime(150, time);
+    o.frequency.exponentialRampToValueAtTime(45, time+0.12);
+    g.gain.setValueAtTime(musicVol()*0.9, time);
+    g.gain.exponentialRampToValueAtTime(0.001, time+0.16);
+    o.connect(g).connect(masterGain);
+    o.start(time); o.stop(time+0.18);
+  }
+  function playHat(time, open){
+    const buf = noiseBuffer(audioCtx, open?0.18:0.05);
+    const src = audioCtx.createBufferSource(); src.buffer = buf;
+    const filt = audioCtx.createBiquadFilter(); filt.type = 'highpass'; filt.frequency.value = 7000;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(musicVol()*0.32, time);
+    g.gain.exponentialRampToValueAtTime(0.001, time+(open?0.16:0.05));
+    src.connect(filt).connect(g).connect(masterGain);
+    src.start(time);
+  }
+  function playBass(freq, time, dur){
+    const o = audioCtx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(freq, time);
+    const filt = audioCtx.createBiquadFilter(); filt.type = 'lowpass';
+    filt.frequency.setValueAtTime(1200, time);
+    filt.frequency.exponentialRampToValueAtTime(280, time+dur);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.linearRampToValueAtTime(musicVol()*0.55, time+0.015);
+    g.gain.exponentialRampToValueAtTime(0.001, time+dur);
+    o.connect(filt).connect(g).connect(masterGain);
+    o.start(time); o.stop(time+dur+0.02);
+  }
+  function playLead(freq, time, dur){
+    const o = audioCtx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(freq, time);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.linearRampToValueAtTime(musicVol()*0.3, time+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, time+dur);
+    o.connect(g).connect(masterGain);
+    o.start(time); o.stop(time+dur+0.02);
+  }
+  function playPad(freq, time, dur){
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.linearRampToValueAtTime(musicVol()*0.28, time+dur*0.3);
+    g.gain.exponentialRampToValueAtTime(0.001, time+dur);
+    const filt = audioCtx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 900;
+    [1, 1.005, 0.5].forEach(mul => {
+      const o = audioCtx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(freq*mul, time);
+      o.connect(filt);
+      o.start(time); o.stop(time+dur+0.05);
+    });
+    filt.connect(g).connect(masterGain);
+  }
+
+  function buildMusicPattern(landscape){
+    const scale = SCALES[landscape];
+    const rr = ROOT_RANGES[landscape];
+    const rootMidi = randInt(rr[0], rr[1]);
+    const scaleFreqs = scale.map(iv => midiToFreq(rootMidi+iv));
+    const rhythm = RHYTHM[landscape];
+    const kickSteps = new Set(rhythm.kick);
+    const hatPattern = new Array(16).fill(null);
+    rhythm.hatClosed.forEach(s => hatPattern[s] = 'closed');
+    rhythm.hatOpen.forEach(s => hatPattern[s] = 'open');
+
+    let idx = 0;
+    const bassPattern = new Array(16).fill(null);
+    for(let s=0;s<16;s++){
+      if(kickSteps.has(s) || Math.random() < 0.3){
+        idx = clamp(idx + (randInt(0,2)-1), 0, scale.length-1);
+        bassPattern[s] = idx;
+      }
+    }
+    const leadPattern = new Array(16).fill(null);
+    if(rhythm.lead){
+      let lidx = Math.floor(scale.length/2);
+      for(let s=0;s<16;s++){
+        if(!kickSteps.has(s) && Math.random() < 0.28){
+          lidx = clamp(lidx + (randInt(0,2)-1), 0, scale.length-1);
+          leadPattern[s] = lidx;
+        }
+      }
+    }
+    return {
+      kickSteps, hatPattern, bassPattern, leadPattern, scaleFreqs,
+      ambient: landscape === 'snow', padFreq: scaleFreqs[0]
+    };
+  }
+
+  function scheduleStep(step, time){
+    const mp = musicPattern;
+    if(!mp) return;
+    const dur = stepDuration()*0.9;
+    if(mp.kickSteps.has(step)) playKick(time);
+    if(mp.hatPattern[step]) playHat(time, mp.hatPattern[step] === 'open');
+    if(mp.bassPattern[step] !== null && mp.bassPattern[step] !== undefined){
+      playBass(mp.scaleFreqs[mp.bassPattern[step]] * 0.5, time, dur*1.6);
+    }
+    if(mp.leadPattern[step] !== null && mp.leadPattern[step] !== undefined){
+      playLead(mp.scaleFreqs[mp.leadPattern[step]] * 2, time, dur);
+    }
+    if(mp.ambient && step === 0){
+      playPad(mp.padFreq * 0.5, time, stepDuration()*8);
+    }
+  }
+
+  function scheduler(){
+    while(nextNoteTime < audioCtx.currentTime + SCHEDULE_AHEAD){
+      if(currentStep === 0 && pendingMusicPattern){
+        musicPattern = pendingMusicPattern;
+        pendingMusicPattern = null;
+      }
+      const trimSec = settings.avTrimMs / 1000;
+      const playAt = Math.max(nextNoteTime + trimSec, audioCtx.currentTime + 0.005);
+      scheduleStep(currentStep, playAt);
+      nextNoteTime += stepDuration();
+      currentStep = (currentStep+1) % 16;
+    }
+  }
+
+  function startAudio(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.connect(audioCtx.destination);
+      nextNoteTime = audioCtx.currentTime + 0.1;
+      currentStep = 0;
+      schedulerTimer = setInterval(scheduler, LOOKAHEAD_MS);
+    }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    updateMasterGain();
+  }
+
+  function updateMasterGain(){
+    if(!masterGain) return;
+    masterGain.gain.value = settings.music ? musicVol()*0.55 : 0;
+  }
+
+  // ---------- particles & skid marks ----------
+  let particles = [];
+  let skidmarks = [];
+
+  function emitDust(x, y, dirx, diry, color, count, spread, speedBase){
+    for(let i=0;i<count;i++){
+      const a = Math.atan2(diry, dirx) + Math.PI + (Math.random()-0.5)*spread;
+      const spd = speedBase * (0.4 + Math.random()*0.8);
+      particles.push({
+        x: x + (Math.random()-0.5)*6,
+        y: y + (Math.random()-0.5)*6,
+        vx: Math.cos(a)*spd,
+        vy: Math.sin(a)*spd,
+        size: 4 + Math.random()*7,
+        life: 0.5 + Math.random()*0.6,
+        age: 0,
+        color
+      });
+    }
+  }
+
+  // ---------- update ----------
+  let paused = false;
+  let lastT = null;
+
+  function update(dt){
+    if(!track) return;
+    const carDef = CAR_TYPES[settings.carType];
+    const land = LANDSCAPES[settings.landscape];
+    const baseSpeed = 55 + (settings.speed/100) * 260;
+    const actualSpeed = baseSpeed * carDef.speedMul;
+
+    player.distance += actualSpeed * dt;
+    const lapNow = Math.floor(player.distance / track.length);
+    if(lapNow > player.lap){ player.lap = lapNow; els.hudLap.textContent = (player.lap+1); }
+
+    const st = sampleTrack(player.distance);
+    const w = trackWidthWorld();
+    const maxLateral = w/2 - carDef.wid*0.7;
+
+    const driftNorm = settings.drift/100;
+    const driftMul = carDef.driftMul;
+    const targetLateral = clamp(-st.curvature * driftNorm * driftMul * actualSpeed * 5.5, -maxLateral*1.1, maxLateral*1.1);
+    const smoothing = 1 - Math.exp(-dt * (2.2 + (1-driftNorm)*9));
+    const prevLateral = player.lateral;
+    player.lateral += (targetLateral - player.lateral) * smoothing;
+
+    player.x = st.x + st.perp.x * player.lateral;
+    player.y = st.y + st.perp.y * player.lateral;
+
+    const lateralVel = (player.lateral - prevLateral) / Math.max(dt, 1e-4);
+    player.slip = clamp(lateralVel / (actualSpeed*0.9 + 40), -1.1, 1.1);
+    player.heading = st.heading + player.slip * 0.55;
+
+    const slipMag = Math.abs(player.slip);
+    if(settings.dust){
+      const emitRate = (actualSpeed/300) * 1.6 + slipMag * 4.5;
+      const count = Math.floor(emitRate * dt * 60 * carDef.dustMul);
+      if(count > 0){
+        const rearX = player.x - st.tangent.x * (carDef.len*0.5);
+        const rearY = player.y - st.tangent.y * (carDef.len*0.5);
+        const [r,g,b] = land.dust;
+        const alpha = land.smokeMode ? 0.35 : 0.55;
+        const col = `rgba(${r},${g},${b},${alpha})`;
+        emitDust(rearX, rearY, st.tangent.x, st.tangent.y, col, Math.min(count,10), 0.9 + slipMag*0.6, 30 + slipMag*70);
+      }
+      if(slipMag > 0.28){
+        addSkid(player.x, player.y, player.heading, st.perp, carDef.wid);
+      }
+    }
+
+    // traffic
+    for(const car of traffic){
+      const sp = baseSpeed * car.speedMul;
+      car.distance += sp * dt;
+      const cst = sampleTrack(car.distance);
+      car.x = cst.x + cst.perp.x * car.lateral;
+      car.y = cst.y + cst.perp.y * car.lateral;
+      car.heading = cst.heading;
+      if(settings.dust && Math.random() < 0.5){
+        const rearX = car.x - cst.tangent.x * (car.len*0.5);
+        const rearY = car.y - cst.tangent.y * (car.len*0.5);
+        const [r,g,b] = land.dust;
+        emitDust(rearX, rearY, cst.tangent.x, cst.tangent.y, `rgba(${r},${g},${b},0.35)`, 1, 0.6, 25);
+      }
+    }
+
+    // particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.age += dt;
+      if(p.age > p.life){ particles.splice(i,1); continue; }
+      p.x += p.vx*dt; p.y += p.vy*dt;
+      p.vx *= 0.94; p.vy *= 0.94;
+      p.size += dt*6;
+    }
+    if(particles.length > 500) particles.splice(0, particles.length-500);
+
+    // skid marks fade
+    for(let i=skidmarks.length-1;i>=0;i--){
+      skidmarks[i].age += dt;
+      if(skidmarks[i].age > skidmarks[i].life) skidmarks.splice(i,1);
+    }
+    if(skidmarks.length > 260) skidmarks.splice(0, skidmarks.length-260);
+
+    els.hudSpeed.textContent = String(Math.round(actualSpeed*0.85)).padStart(3,'0');
+  }
+
+  function addSkid(x,y,heading,perp,wid){
+    const off = wid*0.32;
+    skidmarks.push({ x: x+perp.x*off, y: y+perp.y*off, heading, life: 3.5, age: 0 });
+    skidmarks.push({ x: x-perp.x*off, y: y-perp.y*off, heading, life: 3.5, age: 0 });
+  }
+
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+  // ---------- rendering ----------
+  let dpr = Math.max(1, window.devicePixelRatio||1);
+  let viewScale = 1, viewOffX = 0, viewOffY = 0;
+
+  function resize(){
+    const rect = canvas.parentElement.getBoundingClientRect();
+    dpr = Math.max(1, window.devicePixelRatio||1);
+    canvas.width = Math.floor(rect.width*dpr);
+    canvas.height = Math.floor(rect.height*dpr);
+    viewScale = Math.min(rect.width/WORLD_W, rect.height/WORLD_H) * 0.92;
+    viewOffX = (rect.width - WORLD_W*viewScale)/2;
+    viewOffY = (rect.height - WORLD_H*viewScale)/2;
+  }
+  window.addEventListener('resize', resize);
+
+  function worldTransform(){
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.translate(viewOffX, viewOffY);
+    ctx.scale(viewScale, viewScale);
+  }
+
+  function drawBackground(land){
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const g = ctx.createLinearGradient(0,0,0,rect.height*dpr);
+    g.addColorStop(0, land.skyTop);
+    g.addColorStop(1, land.skyBot);
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
+
+    // subtle texture flecks in world space
+    ctx.save();
+    worldTransform();
+    ctx.fillStyle = land.fleck;
+    for(let i=0;i<70;i++){
+      const x = fleckPos[i].x, y = fleckPos[i].y, s = fleckPos[i].s;
+      if(settings.landscape === 'city'){
+        ctx.fillRect(x, y, s*2.2, s*2.2);
+      } else {
+        ctx.beginPath();
+        ctx.arc(x,y,s,0,Math.PI*2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  // fixed fleck positions so background texture doesn't jitter every frame
+  const fleckPos = Array.from({length:70}, () => ({
+    x: Math.random()*WORLD_W, y: Math.random()*WORLD_H, s: 2+Math.random()*5
+  }));
+
+  function edgesForWidth(w){
+    const half = w/2;
+    const left = [], right = [];
+    for(let i=0;i<track.N;i++){
+      const p = track.pts[i], t = track.tang[i];
+      const px = -t.y, py = t.x;
+      left.push({x: p.x+px*half, y: p.y+py*half});
+      right.push({x: p.x-px*half, y: p.y-py*half});
+    }
+    return {left, right};
+  }
+
+  function drawTrack(land){
+    const w = trackWidthWorld();
+    const {left, right} = edgesForWidth(w);
+    ctx.save();
+    worldTransform();
+
+    ctx.beginPath();
+    ctx.moveTo(left[0].x, left[0].y);
+    for(let i=1;i<left.length;i++) ctx.lineTo(left[i].x, left[i].y);
+    ctx.closePath();
+    ctx.moveTo(right[0].x, right[0].y);
+    for(let i=right.length-1;i>=0;i--) ctx.lineTo(right[i].x, right[i].y);
+
+    // road fill (even-odd creates the ribbon between the two loops)
+    ctx.beginPath();
+    ctx.moveTo(left[0].x, left[0].y);
+    for(let i=1;i<left.length;i++) ctx.lineTo(left[i].x, left[i].y);
+    ctx.lineTo(left[0].x, left[0].y);
+    for(let i=right.length-1;i>=0;i--) ctx.lineTo(right[i].x, right[i].y);
+    ctx.closePath();
+    ctx.fillStyle = '#3a3d43';
+    ctx.fill();
+
+    // curb / edge stripe
+    ctx.lineWidth = 6;
+    ctx.setLineDash([14,10]);
+    ctx.strokeStyle = land.roadEdge;
+    ctx.beginPath();
+    left.forEach((p,i) => i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+    ctx.closePath(); ctx.stroke();
+    ctx.beginPath();
+    right.forEach((p,i) => i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+    ctx.closePath(); ctx.stroke();
+
+    // centerline
+    ctx.setLineDash([16,14]);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+    ctx.beginPath();
+    track.pts.forEach((p,i) => i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+    ctx.closePath(); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  function drawSkidmarks(){
+    ctx.save();
+    worldTransform();
+    for(const s of skidmarks){
+      const a = 1 - s.age/s.life;
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.heading);
+      ctx.fillStyle = `rgba(20,20,22,${0.35*a})`;
+      ctx.fillRect(-1.6, -5, 3.2, 10);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawParticles(){
+    ctx.save();
+    worldTransform();
+    for(const p of particles){
+      const a = 1 - p.age/p.life;
+      ctx.beginPath();
+      ctx.fillStyle = p.color.replace(/[\d.]+\)$/, (parseFloat(p.color.match(/[\d.]+\)$/)[0]) * a) + ')');
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawCarShape(def, driftAmount, isPlayer){
+    // draws centered at origin, facing +x
+    const L = def.len, W = def.wid;
+
+    if(isPlayer){
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, L*0.85, W*1.15, 0, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,176,32,0.30)';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.fillStyle = def.color;
+    roundRect(-L/2, -W/2, L, W, 4);
+    ctx.fill();
+
+    ctx.fillStyle = def.window;
+    if(def.shape === 'truck'){
+      roundRect(-L*0.05, -W*0.34, L*0.34, W*0.68, 2); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      ctx.fillRect(L*0.32, -W*0.42, L*0.55, W*0.84);
+    } else if(def.shape === 'buggy'){
+      roundRect(-L*0.12, -W*0.3, L*0.4, W*0.6, 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(-L*0.15,0, W*0.55, -0.6, 0.6); ctx.stroke();
+    } else if(def.shape === 'sports'){
+      roundRect(-L*0.28, -W*0.3, L*0.42, W*0.6, 3); ctx.fill();
+      ctx.fillStyle = def.color;
+      ctx.fillRect(-L*0.5, -W*0.55, L*0.12, W*1.1);
+    } else {
+      roundRect(-L*0.15, -W*0.32, L*0.5, W*0.64, 3); ctx.fill();
+    }
+
+    // headlights
+    ctx.fillStyle = 'rgba(255,255,220,0.9)';
+    ctx.fillRect(L/2-2.5, -W*0.32, 2, 2.4);
+    ctx.fillRect(L/2-2.5, W*0.32-2.4, 2, 2.4);
+
+    function roundRect(x,y,w,h,r){
+      ctx.beginPath();
+      ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r);
+      ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);
+      ctx.arcTo(x,y,x+w,y,r);
+      ctx.closePath();
+    }
+  }
+
+  function drawTrafficCars(){
+    ctx.save();
+    worldTransform();
+    for(const car of traffic){
+      if(car.x===undefined) continue;
+      ctx.save();
+      ctx.translate(car.x, car.y);
+      ctx.rotate(car.heading);
+      drawCarShape({ color: car.color, window: '#1c1c1c', len: car.len, wid: car.wid, shape: 'sedan' }, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawPlayerCar(){
+    const def = CAR_TYPES[settings.carType];
+    ctx.save();
+    worldTransform();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.heading);
+    drawCarShape(def, Math.abs(player.slip), true);
+    ctx.restore();
+  }
+
+  function render(){
+    const land = LANDSCAPES[settings.landscape];
+    drawBackground(land);
+    drawTrack(land);
+    drawSkidmarks();
+    drawParticles();
+    drawTrafficCars();
+    drawPlayerCar();
+  }
+
+  function loop(t){
+    if(lastT===null) lastT = t;
+    let dt = (t - lastT)/1000;
+    lastT = t;
+    dt = Math.min(dt, 0.05);
+    if(!paused) update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- init ----------
+  resize();
+  rebuildTrack(true);
+  if(settings.autoRandom) startAutoRandom();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
